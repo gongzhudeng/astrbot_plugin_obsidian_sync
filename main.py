@@ -78,6 +78,7 @@ class ObsidianSync(Star):
         self._sync_on_startup = bool(self._config.get("sync_on_startup", False))
         # chunk_rules: list of {pattern, chunk_size, overlap} applied in order on filename
         self._chunk_rules: list[dict] = self._config.get("chunk_rules", [])
+        self._memory_dir = pathlib.Path(self._config.get("memory_dir", "")) if self._config.get("memory_dir") else None
         try:
             self._loop = asyncio.get_event_loop()
         except RuntimeError:
@@ -181,6 +182,8 @@ class ObsidianSync(Star):
             self._allowed_user_ids = set(str(x) for x in cfg.get("allowed_user_ids", list(self._allowed_user_ids)))
             self._sync_on_startup = bool(cfg.get("sync_on_startup", self._sync_on_startup))
             self._chunk_rules = cfg.get("chunk_rules", self._chunk_rules)
+            memory_dir_str = cfg.get("memory_dir", "")
+            self._memory_dir = pathlib.Path(memory_dir_str) if memory_dir_str else None
         except Exception as e:
             logger.warning(f"[ObsidianSync] 配置热更新失败，使用旧配置: {e}")
 
@@ -494,6 +497,150 @@ class ObsidianSync(Star):
             yield event.plain_result(msg)
         except (json.JSONDecodeError, OSError) as e:
             yield event.plain_result(f"读取状态失败: {e}")
+
+    # ── 记忆文件读写 LLM Tool ─────────────────────────────
+
+    @filter.llm_tool(name="memory_write")
+    async def memory_write(
+        self,
+        event: AstrMessageEvent,
+        operation: str,
+        filename: str = "",
+        content: str = "",
+        search_text: str = "",
+        replace_text: str = "",
+        section: str = "",
+    ):
+        """当用户要求记住、更新、修改或删除某件事时，调用此工具读写本地 Markdown 记忆文件。
+
+        操作流程：
+        1. 先调用 operation=list 获取所有可用文件名，根据文件名语义判断目标文件。
+        2. 确定目标文件后，必须先调用 operation=read 读取文件全文，理解其已有的
+           Markdown 格式、章节结构和表述风格，再决定如何自然融合新信息。
+           不允许在未读取文件内容的情况下直接写入。
+        3. 根据读取结果判断：若信息已存在则用 edit 修改，若是新增信息则用 add 追加，
+           若要删除则用 delete，尽量将内容融入合适的章节，而不是生硬地追加到末尾。
+        4. 若没有合适的文件，先询问用户是否新建，用户确认后再调用 create_file。
+
+        Args:
+            operation(string): 操作类型：
+                list = 列出所有记忆文件名（不读取内容）；
+                read = 读取指定文件完整内容，用于写入前理解结构；
+                add  = 在指定章节末追加内容，section 为空则追加到文件末尾；
+                edit = 将文件中的 search_text 精确替换为 replace_text；
+                delete = 删除文件中的 search_text（replace_text 留空）；
+                create_file = 新建文件并写入初始内容（需先获得用户确认）
+            filename(string): 目标文件名，含扩展名，如 "国哥.md"；list 操作可留空
+            content(string): 要写入或追加的内容；add / create_file 操作使用
+            search_text(string): 要查找的文本；edit / delete 操作使用
+            replace_text(string): 替换后的文本；edit 操作使用，delete 操作留空
+            section(string): add 操作的目标章节标题，如 "作息"；找不到时追加到末尾
+        """
+        if self._memory_dir is None:
+            return self._llm_tool_text_result("记忆目录未配置，请在插件设置中填写 memory_dir 路径。")
+
+        memory_dir = self._memory_dir
+
+        if operation == "list":
+            if not memory_dir.exists():
+                return self._llm_tool_text_result(f"记忆目录不存在: {memory_dir}")
+            files = sorted(p.name for p in memory_dir.glob("*.md"))
+            if not files:
+                return self._llm_tool_text_result("记忆目录中暂无 .md 文件。")
+            return self._llm_tool_text_result("可用记忆文件：\n" + "\n".join(f"- {f}" for f in files))
+
+        if operation == "read":
+            if not filename:
+                return self._llm_tool_text_result("read 操作需要提供 filename。")
+            target = memory_dir / filename
+            if not target.exists():
+                return self._llm_tool_text_result(f"文件不存在: {filename}")
+            try:
+                text = target.read_text(encoding="utf-8")
+                return self._llm_tool_text_result(f"文件内容（{filename}）：\n\n{text}")
+            except OSError as e:
+                return self._llm_tool_text_result(f"读取失败: {e}")
+
+        if operation == "add":
+            if not filename or not content:
+                return self._llm_tool_text_result("add 操作需要提供 filename 和 content。")
+            target = memory_dir / filename
+            if not target.exists():
+                return self._llm_tool_text_result(f"文件不存在: {filename}，如需新建请使用 create_file。")
+            try:
+                text = target.read_text(encoding="utf-8")
+                if section:
+                    # Find the section heading and insert after the last line of that section
+                    lines = text.splitlines(keepends=True)
+                    insert_pos = None
+                    in_section = False
+                    for i, line in enumerate(lines):
+                        stripped = line.strip()
+                        if stripped.lstrip("#").strip() == section and stripped.startswith("#"):
+                            in_section = True
+                            continue
+                        if in_section:
+                            # Next heading at same or higher level marks end of section
+                            if stripped.startswith("#"):
+                                insert_pos = i
+                                break
+                    if insert_pos is None and in_section:
+                        insert_pos = len(lines)
+                    if insert_pos is not None:
+                        lines.insert(insert_pos, content.rstrip("\n") + "\n")
+                        text = "".join(lines)
+                    else:
+                        # Section not found, append to end
+                        text = text.rstrip("\n") + "\n\n" + content.rstrip("\n") + "\n"
+                else:
+                    text = text.rstrip("\n") + "\n\n" + content.rstrip("\n") + "\n"
+                target.write_text(text, encoding="utf-8")
+                return self._llm_tool_text_result(f"已写入 {filename}。")
+            except OSError as e:
+                return self._llm_tool_text_result(f"写入失败: {e}")
+
+        if operation in ("edit", "delete"):
+            if not filename or not search_text:
+                return self._llm_tool_text_result(f"{operation} 操作需要提供 filename 和 search_text。")
+            target = memory_dir / filename
+            if not target.exists():
+                return self._llm_tool_text_result(f"文件不存在: {filename}")
+            try:
+                text = target.read_text(encoding="utf-8")
+                if search_text not in text:
+                    return self._llm_tool_text_result(
+                        f"未在 {filename} 中找到指定文本，请确认内容是否正确。"
+                    )
+                replacement = replace_text if operation == "edit" else ""
+                text = text.replace(search_text, replacement, 1)
+                target.write_text(text, encoding="utf-8")
+                action = "修改" if operation == "edit" else "删除"
+                return self._llm_tool_text_result(f"已在 {filename} 中完成{action}。")
+            except OSError as e:
+                return self._llm_tool_text_result(f"操作失败: {e}")
+
+        if operation == "create_file":
+            if not filename:
+                return self._llm_tool_text_result("create_file 操作需要提供 filename。")
+            if not filename.endswith(".md"):
+                filename = filename + ".md"
+            target = memory_dir / filename
+            if target.exists():
+                return self._llm_tool_text_result(f"文件 {filename} 已存在，请使用 add 或 edit 操作。")
+            try:
+                memory_dir.mkdir(parents=True, exist_ok=True)
+                initial = content if content else f"# {filename[:-3]}\n"
+                target.write_text(initial, encoding="utf-8")
+                return self._llm_tool_text_result(f"已创建 {filename}。")
+            except OSError as e:
+                return self._llm_tool_text_result(f"创建失败: {e}")
+
+        return self._llm_tool_text_result(f"未知操作类型: {operation}")
+
+    @staticmethod
+    def _llm_tool_text_result(text: str) -> str:
+        """Return a plain text string as an LLM tool result."""
+        return text
 
     # ── 生命周期 ──────────────────────────────────────────
     async def terminate(self):

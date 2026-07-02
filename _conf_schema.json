@@ -6,6 +6,13 @@
     "obvious_hint": true,
     "default": "D:/AstrBotData/Obsidian"
   },
+  "memory_dir": {
+    "description": "AI 记忆文件目录（对话中可直接读写的 .md 文件所在路径）",
+    "type": "string",
+    "hint": "AI 通过对话自动编辑的本地 Markdown 文件所在目录，例如 D:/AstrBotData/Obsidian/人设。留空则禁用此功能。",
+    "obvious_hint": true,
+    "default": ""
+  },
   "sync_mode": {
     "description": "同步模式",
     "type": "string",
