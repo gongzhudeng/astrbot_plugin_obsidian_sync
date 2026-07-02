@@ -57,7 +57,7 @@ def _posix_relative(md: pathlib.Path, obsidian_dir: pathlib.Path) -> str:
     return md.relative_to(obsidian_dir).as_posix()
 
 
-@register("obsidian_sync", "牧濑红莉栖", "监听本地 Obsidian 目录，定时同步到 AstrBot 知识库", "0.8.1")
+@register("obsidian_sync", "gongzhudeng", "监听本地 Obsidian 目录，定时同步到 AstrBot 知识库，支持按文件名差异化分块", "1.1.0")
 class ObsidianSync(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
@@ -76,6 +76,8 @@ class ObsidianSync(Star):
         self._admin_user_ids = set(str(x) for x in self._config.get("admin_user_ids", []))
         self._allowed_user_ids = set(str(x) for x in self._config.get("allowed_user_ids", []))
         self._sync_on_startup = bool(self._config.get("sync_on_startup", False))
+        # chunk_rules: list of {pattern, chunk_size, overlap} applied in order on filename
+        self._chunk_rules: list[dict] = self._config.get("chunk_rules", [])
         try:
             self._loop = asyncio.get_event_loop()
         except RuntimeError:
@@ -178,6 +180,7 @@ class ObsidianSync(Star):
             self._admin_user_ids = set(str(x) for x in cfg.get("admin_user_ids", list(self._admin_user_ids)))
             self._allowed_user_ids = set(str(x) for x in cfg.get("allowed_user_ids", list(self._allowed_user_ids)))
             self._sync_on_startup = bool(cfg.get("sync_on_startup", self._sync_on_startup))
+            self._chunk_rules = cfg.get("chunk_rules", self._chunk_rules)
         except Exception as e:
             logger.warning(f"[ObsidianSync] 配置热更新失败，使用旧配置: {e}")
 
@@ -222,6 +225,23 @@ class ObsidianSync(Star):
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(state, f, ensure_ascii=False, indent=2)
         os.replace(tmp, FILE_STATE_FILE)
+
+    # ── 分块规则匹配 ──────────────────────────────────────
+    def _get_chunk_params(self, filename: str) -> tuple[int | None, int | None]:
+        """Return (chunk_size, overlap) for a given filename.
+
+        Iterates chunk_rules in order; first rule whose 'pattern' is a
+        case-insensitive substring of the filename wins.
+        Returns (None, None) to fall back to the KB plugin defaults.
+        """
+        name_lower = filename.lower()
+        for rule in self._chunk_rules:
+            pattern = str(rule.get("pattern", "")).lower()
+            if pattern and pattern in name_lower:
+                cs = rule.get("chunk_size") or None
+                ov = rule.get("overlap") or None
+                return (int(cs) if cs else None, int(ov) if ov else None)
+        return (None, None)
 
     # ── 文件扫描 ──────────────────────────────────────────
     def _scan_files(self) -> list[pathlib.Path]:
@@ -382,7 +402,9 @@ class ObsidianSync(Star):
 
         total_chunks = 0
         for rel_path, text in docs_to_write:
-            chunks = text_splitter.split_text(text)
+            filename = rel_path.split("/")[-1]
+            cs, ov = self._get_chunk_params(filename)
+            chunks = text_splitter.split_text(text, chunk_size=cs, overlap=ov)
             if not chunks:
                 continue
             documents = [

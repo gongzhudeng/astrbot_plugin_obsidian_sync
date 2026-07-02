@@ -85,5 +85,11 @@
     "type": "list",
     "hint": "除管理员外，额外允许执行手动命令的 QQ 号列表",
     "default": []
+  },
+  "chunk_rules": {
+    "description": "按文件名匹配的分块规则列表",
+    "type": "list",
+    "hint": "每条规则格式：{\"pattern\": \"文件名关键词\", \"chunk_size\": 200, \"overlap\": 20}。pattern 为文件名子串（不区分大小写），首条命中的规则生效，无命中则使用知识库插件默认值。示例：[{\"pattern\": \"基础信息\", \"chunk_size\": 150, \"overlap\": 10}, {\"pattern\": \"邻居\", \"chunk_size\": 500, \"overlap\": 50}]",
+    "default": []
   }
 }

@@ -1,8 +1,8 @@
 name: obsidian_sync
 display_name: 灵犀 · Obsidian 知识库同步
-version: "1.0.0"
-description: 定时监听本地 Obsidian 目录，自动全量同步 Markdown 笔记到老知识库插件（astrbot_plugin_knowledge_base）的向量数据库。支持每日定时和定时间隔两种模式，可在 WebUI 配置面板设置。
-author: 灵犀
-short_desc: Obsidian 笔记自动同步到 AstrBot 老知识库插件
+version: "1.1.0"
+description: 定时监听本地 Obsidian 目录，自动全量同步 Markdown 笔记到老知识库插件（astrbot_plugin_knowledge_base）的向量数据库。支持每日定时和定时间隔两种模式，支持按文件名匹配不同分块与重叠参数，可在 WebUI 配置面板设置。
+author: gongzhudeng
+short_desc: Obsidian 笔记自动同步到 AstrBot 老知识库插件，支持按文件名差异化分块
 astrbot_version: ">=4.5,<5"
 repository: "https://github.com/gongzhudeng/astrbot_plugin_obsidian_sync"
