@@ -303,7 +303,6 @@ class ObsidianSync(Star):
 
         deleted_paths = [p for p in old_state.keys() if p not in current_paths]
         has_changes = bool(changed_files) or bool(deleted_paths)
-        self._save_state({"files": new_state, "updated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
 
         if not has_changes:
             logger.info("[ObsidianSync] No changes, skipping sync")
@@ -340,6 +339,8 @@ class ObsidianSync(Star):
             self._persist_readonly_status(ok=False, message=f"写入失败: {str(e)[:200]}", stage="build", changed=len(changed_files))
             return False, str(e)
 
+        # Only persist state after successful KB write
+        self._save_state({"files": new_state, "updated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
         result_msg = f"sync ok (总{total}条向量)"
         logger.info(f"[ObsidianSync] Sync complete. {total} chunks written to KB '{self._kb_name}'")
         self._write_status(ok=True, stage="build", message="sync ok", changed=len(changed_files), deleted=len(deleted_paths), kb_name=self._kb_name)
