@@ -1,8 +1,8 @@
 {
   "obsidian_dir": {
-    "description": "Obsidian 笔记目录路径",
+    "description": "本地 Markdown 文件目录（同步到知识库）",
     "type": "string",
-    "hint": "本地 Obsidian vault 的完整路径，例如 D:/AstrBotData/Obsidian",
+    "hint": "需要同步到知识库的本地目录完整路径，例如 D:/AstrBotData/Notes",
     "obvious_hint": true,
     "default": "D:/AstrBotData/Obsidian"
   },
@@ -12,6 +12,12 @@
     "hint": "AI 通过对话自动编辑的本地 Markdown 文件所在目录，例如 D:/AstrBotData/Obsidian/人设。留空则禁用此功能。",
     "obvious_hint": true,
     "default": ""
+  },
+  "memory_write_enabled": {
+    "description": "启用 AI 智能写入功能",
+    "type": "bool",
+    "hint": "开启后 AI 可在对话中自动读写 memory_dir 内的 Markdown 记忆文件；关闭后工具不可用，不消耗额外 token",
+    "default": true
   },
   "sync_mode": {
     "description": "同步模式",

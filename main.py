@@ -1,13 +1,13 @@
-"""Obsidian 知识库同步插件 for AstrBot
-==================================
-v1.0.0 — 对接老知识库插件版
+"""本地知识库同步插件 for AstrBot
+================================
 
 - 支持每日定时或定时间隔同步
 - 通过 WebUI 配置面板设置参数
-- 检测 Obsidian 目录变更后自动增量写入知识库
+- 检测本地目录变更后自动增量写入知识库
 - 全量替换：每次同步先删除旧集合再重建
 - 支持命令权限控制与同步状态记录
 - 支持配置面板手动同步与状态回显
+- AI 智能写入：可在对话中直接读写本地 Markdown 记忆文件（可在设置中开关）
 - 依赖 astrbot_plugin_knowledge_base 插件提供向量数据库
 """
 
@@ -57,7 +57,7 @@ def _posix_relative(md: pathlib.Path, obsidian_dir: pathlib.Path) -> str:
     return md.relative_to(obsidian_dir).as_posix()
 
 
-@register("obsidian_sync", "gongzhudeng", "监听本地 Obsidian 目录，定时同步到 AstrBot 知识库，支持按文件名差异化分块", "1.1.0")
+@register("obsidian_sync", "gongzhudeng", "监听本地 Markdown 目录，定时同步到 AstrBot 知识库，支持 AI 智能写入记忆文件", "2.1.0")
 class ObsidianSync(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
@@ -79,6 +79,7 @@ class ObsidianSync(Star):
         # chunk_rules: list of {pattern, chunk_size, overlap} applied in order on filename
         self._chunk_rules: list[dict] = self._config.get("chunk_rules", [])
         self._memory_dir = pathlib.Path(self._config.get("memory_dir", "")) if self._config.get("memory_dir") else None
+        self._memory_write_enabled = bool(self._config.get("memory_write_enabled", True))
         try:
             self._loop = asyncio.get_event_loop()
         except RuntimeError:
@@ -184,6 +185,7 @@ class ObsidianSync(Star):
             self._chunk_rules = cfg.get("chunk_rules", self._chunk_rules)
             memory_dir_str = cfg.get("memory_dir", "")
             self._memory_dir = pathlib.Path(memory_dir_str) if memory_dir_str else None
+            self._memory_write_enabled = bool(cfg.get("memory_write_enabled", self._memory_write_enabled))
         except Exception as e:
             logger.warning(f"[ObsidianSync] 配置热更新失败，使用旧配置: {e}")
 
@@ -536,6 +538,8 @@ class ObsidianSync(Star):
             replace_text(string): 替换后的文本；edit 操作使用，delete 操作留空
             section(string): add 操作的目标章节标题，如 "作息"；找不到时追加到末尾
         """
+        if not self._memory_write_enabled:
+            return self._llm_tool_text_result("AI 智能写入功能已关闭，请在插件设置中开启 memory_write_enabled。")
         if self._memory_dir is None:
             return self._llm_tool_text_result("记忆目录未配置，请在插件设置中填写 memory_dir 路径。")
 

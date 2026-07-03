@@ -1,8 +1,8 @@
 name: obsidian_sync
-display_name: 灵犀 · Obsidian 知识库同步
-version: "2.0.0"
-description: 定时监听本地 Obsidian 目录，自动全量同步 Markdown 笔记到知识库插件的向量数据库。v2.0 新增 AI 记忆写入功能：AI 可在对话中自动判断时机，直接读写本地 Markdown 人设文件，支持新增、修改、删除内容，写入前先读取文件结构以自然融合，下次同步后自动进入知识库。支持每日定时和定时间隔同步，支持按文件名差异化分块。
+display_name: 灵犀 · 本地知识库同步
+version: "2.1.0"
+description: 定时监听本地 Markdown 目录，自动全量同步到知识库插件的向量数据库。支持 AI 记忆写入：AI 可在对话中直接读写本地 Markdown 文件，智能融合新信息（新增/修改/删除），写入前自动读取文件结构，下次同步后自动进入知识库。支持每日定时和定时间隔同步，支持按文件名差异化分块，智能写入可在设置中独立开关。
 author: gongzhudeng
-short_desc: Obsidian 笔记自动同步 + AI 对话直接写入本地记忆文件（v2.0 新增）
+short_desc: 本地 Markdown 文件自动同步知识库 + AI 对话直接写入本地记忆文件
 astrbot_version: ">=4.5,<5"
 repository: "https://github.com/gongzhudeng/astrbot_plugin_obsidian_sync"
