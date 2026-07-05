@@ -57,7 +57,7 @@ def _posix_relative(md: pathlib.Path, obsidian_dir: pathlib.Path) -> str:
     return md.relative_to(obsidian_dir).as_posix()
 
 
-@register("obsidian_sync", "gongzhudeng", "监听本地 Markdown 目录，定时同步到 AstrBot 知识库，支持 AI 智能写入记忆文件", "2.1.0")
+@register("obsidian_sync", "gongzhudeng", "监听本地 Markdown 目录，定时同步到 AstrBot 知识库，支持 AI 智能写入记忆文件", "2.2.0")
 class ObsidianSync(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
@@ -441,19 +441,22 @@ class ObsidianSync(Star):
             self._reload_config()
             wait = self._get_wait_seconds()
             remaining = wait
+            manual_requested = False
             while remaining > 0 and not self._stop_event.is_set():
                 chunk = min(15, remaining)
                 self._stop_event.wait(chunk)
                 remaining -= chunk
-
-            # 检测两种手动触发方式
-            if self._check_manual_sync() or self._manual_trigger.is_set():
-                logger.info("[ObsidianSync] 检测到手动同步请求，立即执行...")
-                self._manual_trigger.clear()
-                break
+                # Check for manual sync requests during the wait interval
+                if self._check_manual_sync() or self._manual_trigger.is_set():
+                    manual_requested = True
+                    break
 
             if self._stop_event.is_set():
                 break
+
+            if manual_requested:
+                logger.info("[ObsidianSync] 检测到手动同步请求，立即执行...")
+                self._manual_trigger.clear()
 
             try:
                 self._do_sync()

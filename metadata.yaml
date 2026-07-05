@@ -1,6 +1,6 @@
 name: obsidian_sync
 display_name: 灵犀 · 本地知识库同步
-version: "2.1.0"
+version: "2.2.0"
 description: 定时监听本地 Markdown 目录，自动全量同步到知识库插件的向量数据库。支持 AI 记忆写入：AI 可在对话中直接读写本地 Markdown 文件，智能融合新信息（新增/修改/删除），写入前自动读取文件结构，下次同步后自动进入知识库。支持每日定时和定时间隔同步，支持按文件名差异化分块，智能写入可在设置中独立开关。
 author: gongzhudeng
 short_desc: 本地 Markdown 文件自动同步知识库 + AI 对话直接写入本地记忆文件
